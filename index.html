@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tạo mã vạch</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        h3 {
+            color: #343a40;
+        }
+        .btn-custom {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s;
+        }
+        .btn-custom img {
+            width: 20px;
+            height: 20px;
+        }
+        .barcode-frame {
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 15px 0;
+            text-align: center;
+            background-color: #f1f8ff;
+            page-break-inside: avoid;
+        }
+        .barcode-frame p {
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .barcode-frame canvas {
+            margin: 0 auto;
+        }
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #6c757d;
+        }
+        .settings-panel {
+            background-color: #f1f8ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+        }
+        #summaryInfo {
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tạo mã vạch Code 128</h1>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel">
+            <h5>Cài đặt mã vạch</h5>
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="barcodeWidth" class="form-label">Chiều rộng</label>
+                    <input type="range" class="form-range" id="barcodeWidth" min="1" max="4" step="0.1" value="2">
+                </div>
+                <div class="col-md-4">
+                    <label for="barcodeHeight" class="form-label">Chiều cao</label>
+                    <input type="range" class="form-range" id="barcodeHeight" min="20" max="100" value="50">
+                </div>
+                <div class="col-md-4">
+                    <label for="displayValue" class="form-label">Hiển thị giá trị</label>
+                    <select class="form-select" id="displayValue">
+                        <option value="true">Có</option>
+                        <option value="false">Không</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Excel File Input Section -->
+        <h3 class="mt-4">Nhập file Excel</h3>
+        <div class="mb-3">
+            <label for="excelFile" class="form-label">Chọn file Excel chứa danh sách mã:</label>
+            <input type="file" class="form-control" id="excelFile" accept=".xlsx, .xls">
+        </div>
+        <button class="btn btn-primary btn-custom" onclick="generateBarcodesFromExcel()">
+            <img src="https://cdn-icons-png.flaticon.com/512/1828/1828919.png" alt="icon"> Tạo mã vạch từ Excel
+        </button>
+
+        <!-- Manual Input Section -->
+        <h3 class="mt-4">Nhập thủ công</h3>
+        <textarea class="form-control mb-3" id="inputList" rows="5" placeholder="Nhập danh sách mã, mỗi mã một dòng"></textarea>
+        <button class="btn btn-success btn-custom" onclick="generateBarcodes()">
+            <img src="https://cdn-icons-png.flaticon.com/512/148/148839.png" alt="icon"> Tạo mã vạch
+        </button>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Đang xử lý dữ liệu...</p>
+        </div>
+
+        <!-- Summary Info -->
+        <div id="summaryInfo"></div>
+
+        <!-- Barcode Output -->
+        <div id="barcodeList" class="mt-4"></div>
+
+        <!-- Print and Download Buttons -->
+        <div class="d-flex justify-content-between mt-3" id="actionButtons" style="display: none;">
+            <button class="btn btn-info" onclick="printBarcodes()">
+                <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" alt="icon" width="20"> In mã vạch
+            </button>
+            <button class="btn btn-secondary" onclick="downloadAllBarcodes()">
+                <img src="https://cdn-icons-png.flaticon.com/512/3580/3580148.png" alt="icon" width="20"> Tải xuống tất cả
+            </button>
+        </div>
+    </div>
+
+    <footer>© 2025 PHAMHUYTHONG. All rights reserved. Created by PHAMHUYTHONG.</footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        // Get current barcode settings
+        function getBarcodeSettings() {
+            return {
+                format: 'CODE128',
+                width: document.getElementById('barcodeWidth').value,
+                height: document.getElementById('barcodeHeight').value,
+                displayValue: document.getElementById('displayValue').value === 'true',
+                margin: 10
+            };
+        }
+
+        // Create a single barcode element
+        function createBarcodeElement(code, index) {
+            const frame = document.createElement('div');
+            frame.className = 'barcode-frame';
+            
+            const sequence = document.createElement('p');
+            sequence.textContent = `Mã số ${index + 1}`;
+            frame.appendChild(sequence);
+
+            const canvas = document.createElement('canvas');
+            canvas.id = 'barcode' + index;
+            frame.appendChild(canvas);
+
+            const label = document.createElement('p');
+            label.textContent = code;
+            frame.appendChild(label);
+
+            return frame;
+        }
+
+        // Generate barcodes from manual input
+        function generateBarcodes() {
+            const input = document.getElementById('inputList').value;
+            const codes = input.split('\n').filter(code => code.trim() !== '');
+            renderBarcodes(codes);
+        }
+
+        // Generate barcodes from Excel file
+        function generateBarcodesFromExcel() {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Vui lòng chọn file Excel!');
+                return;
+            }
+
+            showLoading(true);
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                    const codes = jsonData.flat()
+                        .filter(code => code && code.toString().trim() !== '')
+                        .map(code => code.toString());
+
+                    renderBarcodes(codes);
+                } catch (error) {
+                    alert('Đã xảy ra lỗi khi đọc file Excel: ' + error.message);
+                    console.error(error);
+                } finally {
+                    showLoading(false);
+                }
+            };
+            
+            reader.onerror = function() {
+                alert('Đã xảy ra lỗi khi đọc file!');
+                showLoading(false);
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Main function to render barcodes
+        function renderBarcodes(codes) {
+            if (codes.length === 0) {
+                alert('Không tìm thấy mã nào để tạo mã vạch!');
+                return;
+            }
+
+            const barcodeList = document.getElementById('barcodeList');
+            barcodeList.innerHTML = '';
+            
+            const settings = getBarcodeSettings();
+            let validCount = 0;
+            let errorCount = 0;
+
+            codes.forEach((code, index) => {
+                const frame = createBarcodeElement(code, index);
+                barcodeList.appendChild(frame);
+                
+                try {
+                    JsBarcode('#barcode' + index, code, settings);
+                    validCount++;
+                } catch (error) {
+                    console.error(`Lỗi khi tạo mã vạch cho: ${code}`, error);
+                    frame.style.borderColor = '#dc3545';
+                    frame.style.backgroundColor = '#f8d7da';
+                    const errorMsg = document.createElement('p');
+                    errorMsg.textContent = `Lỗi: ${error.message}`;
+                    errorMsg.style.color = '#dc3545';
+                    frame.appendChild(errorMsg);
+                    errorCount++;
+                }
+            });
+
+            // Update summary info
+            document.getElementById('summaryInfo').innerHTML = `
+                Đã tạo ${validCount} mã vạch thành công, ${errorCount} lỗi.
+                ${errorCount > 0 ? 'Mã lỗi được đánh dấu màu đỏ.' : ''}
+            `;
+
+            // Show action buttons if we have valid barcodes
+            if (validCount > 0) {
+                document.getElementById('actionButtons').style.display = 'flex';
+            }
+        }
+
+        // Show/hide loading indicator
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+        }
+
+        // Print all barcodes
+        function printBarcodes() {
+            window.print();
+        }
+
+        // Download all barcodes as images
+        function downloadAllBarcodes() {
+            alert('Tính năng này đang được phát triển!');
+            // Implementation would go here
+        }
+    </script>
+</body>
+</html>
