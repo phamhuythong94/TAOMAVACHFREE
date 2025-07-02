@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <title>Tạo Mã Vạch Miễn Phí | Công cụ tạo Code 128 từ Excel</title>
-    <meta name="description" content="Tạo mã vạch Code 128 online miễn phí, hỗ trợ nhập file Excel hoặc danh sách thủ công. Xuất mã vạch chất lượng cao, dễ dàng in ấn và quản lý kho.">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tạo mã vạch</title>
@@ -75,16 +73,41 @@
             font-weight: bold;
             color: #28a745;
         }
+        /* Thêm style cho phần quét mã */
+        #scanner-container {
+            position: relative;
+            margin: 15px 0;
+            border: 2px solid #ffc107;
+            border-radius: 5px;
+            overflow: hidden;
+            display: none;
+        }
+        #scanner-video {
+            background: #000;
+            width: 100%;
+        }
+        .scan-history-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .scan-history-item:hover {
+            background-color: #f8f9fa;
+        }
+        #scan-history {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
-    <title>Tạo Mã Vạch Miễn Phí | Công cụ tạo Code 128 từ Excel</title>
-<meta name="description" content="Tạo mã vạch Code 128 online miễn phí, hỗ trợ nhập file Excel hoặc danh sách thủ công. Xuất mã vạch chất lượng cao, dễ dàng in ấn và quản lý kho.">
 <body>
     <div class="container">
-    <h1>Tạo mã vạch Code 128</h1>
-    <p class="text-center"><strong>Công cụ tạo mã vạch online miễn phí</strong>, hỗ trợ đọc file Excel (.xlsx, .xls) hoặc nhập thủ công. Tạo mã vạch chuẩn Code 128 để in tem, quản lý sản phẩm, kho hàng.</p>
-    ...
-</div>
+        <h1>Tạo mã vạch Code 128</h1>
 
         <!-- Settings Panel -->
         <div class="settings-panel">
@@ -125,6 +148,28 @@
             <img src="https://cdn-icons-png.flaticon.com/512/148/148839.png" alt="icon"> Tạo mã vạch
         </button>
 
+        <!-- Barcode Scanner Section -->
+        <h3 class="mt-4">Quét mã vạch</h3>
+        <div id="scanner-container">
+            <video id="scanner-video" playsinline></video>
+            <button class="btn btn-danger mt-2 w-100" onclick="stopScanner()">Dừng quét</button>
+        </div>
+        <button class="btn btn-warning btn-custom mb-3" onclick="startScanner()">
+            <img src="https://cdn-icons-png.flaticon.com/512/2991/2991232.png" alt="icon"> Bật camera quét mã
+        </button>
+
+        <!-- Scan History Section -->
+        <h3>Lịch sử quét <span id="scan-count" class="badge bg-secondary">0</span></h3>
+        <div id="scan-history" class="mb-3"></div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="exportScannedToExcel()">
+                <img src="https://cdn-icons-png.flaticon.com/512/732/732220.png" alt="icon" width="20"> Xuất Excel
+            </button>
+            <button class="btn btn-outline-danger" onclick="clearScanHistory()">
+                <img src="https://cdn-icons-png.flaticon.com/512/484/484662.png" alt="icon" width="20"> Xóa lịch sử
+            </button>
+        </div>
+
         <!-- Loading Indicator -->
         <div id="loadingIndicator">
             <div class="spinner-border text-primary" role="status">
@@ -156,6 +201,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.7.7/dist/quagga.min.js"></script>
     <script>
         // Get current barcode settings
         function getBarcodeSettings() {
@@ -295,6 +341,121 @@
             alert('Tính năng này đang được phát triển!');
             // Implementation would go here
         }
+
+        // ==================== Barcode Scanner Functions ====================
+        let scanHistory = JSON.parse(localStorage.getItem('scanHistory')) || [];
+
+        // Start barcode scanner
+        function startScanner() {
+            document.getElementById('scanner-container').style.display = 'block';
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner-video'),
+                    constraints: {
+                        facingMode: "environment"
+                    },
+                },
+                decoder: {
+                    readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error(err);
+                    alert("Không thể khởi động camera: " + err.message);
+                    return;
+                }
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                const code = result.codeResult.code;
+                if (code && !scanHistory.includes(code)) {
+                    addToScanHistory(code);
+                }
+            });
+        }
+
+        // Stop barcode scanner
+        function stopScanner() {
+            Quagga.stop();
+            document.getElementById('scanner-container').style.display = 'none';
+        }
+
+        // Add scanned code to history
+        function addToScanHistory(code) {
+            scanHistory.unshift(code); // Add to beginning of array
+            if (scanHistory.length > 50) {
+                scanHistory = scanHistory.slice(0, 50); // Limit to 50 items
+            }
+            localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+            updateScanHistoryDisplay();
+        }
+
+        // Update scan history display
+        function updateScanHistoryDisplay() {
+            const historyContainer = document.getElementById('scan-history');
+            historyContainer.innerHTML = '';
+            
+            scanHistory.forEach((code, index) => {
+                const item = document.createElement('div');
+                item.className = 'scan-history-item';
+                item.innerHTML = `
+                    <span><strong>${index + 1}.</strong> ${code}</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-success" onclick="createBarcodeFromHistory('${code}')">Tạo mã</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromScanHistory(${index})">Xóa</button>
+                    </div>
+                `;
+                historyContainer.appendChild(item);
+            });
+            
+            document.getElementById('scan-count').textContent = scanHistory.length;
+        }
+
+        // Remove item from scan history
+        function removeFromScanHistory(index) {
+            scanHistory.splice(index, 1);
+            localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+            updateScanHistoryDisplay();
+        }
+
+        // Clear all scan history
+        function clearScanHistory() {
+            if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử quét?')) {
+                scanHistory = [];
+                localStorage.removeItem('scanHistory');
+                updateScanHistoryDisplay();
+            }
+        }
+
+        // Create barcode from history item
+        function createBarcodeFromHistory(code) {
+            document.getElementById('inputList').value = code;
+            generateBarcodes();
+        }
+
+        // Export scan history to Excel
+        function exportScannedToExcel() {
+            if (scanHistory.length === 0) {
+                alert('Không có mã vạch nào trong lịch sử quét!');
+                return;
+            }
+            
+            const data = scanHistory.map((code, index) => [index + 1, code]);
+            const ws = XLSX.utils.aoa_to_sheet([['STT', 'Mã vạch'], ...data]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Mã vạch đã quét");
+            XLSX.writeFile(wb, "ma_vach_da_quet.xlsx");
+        }
+
+        // Initialize scan history display on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateScanHistoryDisplay();
+        });
     </script>
 </body>
 </html>
